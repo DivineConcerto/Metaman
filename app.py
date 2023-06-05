@@ -1,41 +1,37 @@
-import requests
 from flask import Flask, request
 from modelscope.pipelines import pipeline
 from modelscope.utils.constant import Tasks
+import hashlib
+import requests
 
 
 app = Flask(__name__)
-url = 'http://127.0.0.1/interview'
+url = 'http://43.143.222.78:9999/interview'
 
-@app.route('/audio', methods=['POST'])
-def process_audio():
-    if 'audio' not in request.files:
-        return 'No audio file found', 400
+def get_file_hash(file_data):
+    file_hash = hashlib.sha256()
+    file_hash.update(file_data)
+    return file_hash.hexdigest()
 
-    audio_file = request.files['audio']
-    result = p(audio_file)
-    return submin_to_gpt(result)
-    # 在这里进行音频处理逻辑
-    # 例如，保存音频文件或进行语音识别等
-    # 示例：保存音频文件
-    # audio_file.save('received_audio.wav')
-    # 示例：进行语音识别
-    # 假设你使用的是SpeechRecognition库
-    # import speech_recognition as sr
-    # recognizer = sr.Recognizer()
-    # with sr.AudioFile('received_audio.wav') as source:
-    #     audio = recognizer.record(source)
-    # result = recognizer.recognize_google(audio)
-
-def submin_to_gpt(text):
+@app.route('/', methods=['POST'])
+def handle_post():
+    data = request.get_data()
+    print('Received file hash:', get_file_hash(data))
+    with open('temp_audio.wav', 'wb') as f:
+        f.write(data)
+    result = pipe(audio_in='temp_audio.wav')
+    result = result['text']
+    print(result)
     data = {
-        'text': text
+        'prompt': result,
     }
-    response = requests.post(url=url, json=data)
-    return response.text
+    response = requests.post(url=url, data=data).json()['response'][0]
+    return response
+
 
 if __name__ == '__main__':
     print("开始初始化......")
-    p = pipeline('auto-speech-recognition', 'damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch', device='cpu')
+    pipe = pipeline('auto-speech-recognition', 'damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch',
+                 device='cpu')
     print("模型已加载完成")
     app.run(host='0.0.0.0', port=5000)
